@@ -371,8 +371,10 @@ const Page = () => {
           if ((res[0].role = "operator")) {
             return router.push("/pengaduan/tambah");
           }
-          session.user.organization = res[0].organization;
-          session.user.name = res[0].name;
+          if (session.user) {
+            session.user.organization = res[0].organization;
+            session.user.name = res[0].name;
+          }
         } else {
           return;
         }
