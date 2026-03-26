@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1734867154846,
+      "tag": "0000_true_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1734867748386,
+      "tag": "0001_free_silver_surfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1734937176083,
+      "tag": "0002_lovely_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1735128439248,
+      "tag": "0003_wooden_sunset_bain",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1735481696954,
+      "tag": "0004_orange_expediter",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1735482093764,
+      "tag": "0005_mighty_the_executioner",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1741226203896,
+      "tag": "0006_thick_nemesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1741226273674,
+      "tag": "0007_funny_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1741226419317,
+      "tag": "0008_special_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1741576299700,
+      "tag": "0009_violet_talisman",
+      "breakpoints": true
+    }
+  ]
+}

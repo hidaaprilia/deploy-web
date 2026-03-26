@@ -1,0 +1,1 @@
+ALTER TABLE "pengaduan" ADD COLUMN "status" varchar(255);
