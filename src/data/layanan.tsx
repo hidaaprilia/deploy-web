@@ -124,9 +124,9 @@ export const LAYANANS: {
     icon: <StatalkIllustration />,
   },
   {
-    title: "SIITUNG",
-    href: "https://siitung.fikrianggara.dev",
-    description: "Data Strategis Kabupaten Tanjung Jabung Barat",
+    title: "PRISMA",
+    href: "https://prisma.bpsjambi.id/indicator/1507",
+    description: "Platform Indikator Statistik Wilayah Jambi Kabupaten Tanjung Jabung Barat",
     icon: <SiitungIllustration />,
   },
   {
@@ -134,6 +134,13 @@ export const LAYANANS: {
     href: "/pengaduan?mode=pengaduan",
     description:
       "Adukan keluhan terhadap layanan kami atau pelanggaran yang anggota kami lakukan",
+    icon: <PengaduanIllustration />,
+  },
+  {
+    title: "Survei Kebutuhan Data 2026",
+    href: "https://skd.bps.go.id/skd/p/1507",
+    description:
+      "Bantu kami menjadi lebih baik dengan mengisi Survei Kebutuhan Data",
     icon: <PengaduanIllustration />,
   },
 ];
