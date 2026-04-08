@@ -88,7 +88,7 @@ export const LAYANANS: {
   },
   {
     title: "StaTalk",
-    href: "https://wa.me/6285714272305",
+    href: "https://wa.me/6282173054213",
     description: "Layanan chat menggunakan whatsapp",
     icon: <StatalkIllustration />,
   },
