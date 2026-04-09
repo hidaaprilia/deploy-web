@@ -22,6 +22,36 @@ const getCurrentTime = () => {
   });
 };
 
+const DAILY_QUOTA = 10; // batas pesan per hari, ubah sesuai kebutuhan
+const QUOTA_KEY = "bps_chat_quota";
+
+interface QuotaData {
+  count: number;
+  date: string; // format YYYY-MM-DD
+}
+
+const getTodayDate = () => new Date().toISOString().split("T")[0];
+
+const getQuota = (): QuotaData => {
+  try {
+    const raw = localStorage.getItem(QUOTA_KEY);
+    if (!raw) return { count: 0, date: getTodayDate() };
+    const parsed: QuotaData = JSON.parse(raw);
+    // reset jika sudah hari baru
+    if (parsed.date !== getTodayDate()) return { count: 0, date: getTodayDate() };
+    return parsed;
+  } catch {
+    return { count: 0, date: getTodayDate() };
+  }
+};
+
+const incrementQuota = () => {
+  const current = getQuota();
+  const updated: QuotaData = { count: current.count + 1, date: getTodayDate() };
+  localStorage.setItem(QUOTA_KEY, JSON.stringify(updated));
+  return updated;
+};
+
 export default function Chatbot({ onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>(() => [
     {
@@ -34,6 +64,17 @@ export default function Chatbot({ onClose }: Props) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const SUGGESTIONS = [
+  "Berapa jumlah penduduk Tanjung Jabung Barat?",
+  "Apa data PDRB terbaru?",
+  "Bagaimana angka kemiskinan di Tanjabbarat?",
+  "Berapa nilai IPM Tanjung Jabung Barat?",
+  "Di mana saya bisa akses publikasi BPS?",
+];
+
+const [showSuggestions, setShowSuggestions] = useState(true);
+
 
 const formatTextWithLinks = (text: string) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -62,6 +103,7 @@ const formatTextWithLinks = (text: string) => {
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
+  setShowSuggestions(false); // tambahkan ini
 
     const userText = input.trim();
     const timeNow = getCurrentTime();
@@ -127,6 +169,10 @@ const formatTextWithLinks = (text: string) => {
     }
   };
 
+  const handleSuggestion = (text: string) => {
+  setInput(text);
+  setShowSuggestions(false);
+};
   return (
     <>
       {/* BACKDROP */}
@@ -254,28 +300,49 @@ const formatTextWithLinks = (text: string) => {
           </div>
 
           {/* INPUT */}
-          <div className="p-3 border-t flex gap-2">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !isLoading) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Tulis pertanyaan..."
-              className="flex-1 px-4 py-2 border rounded-full text-sm"
-            />
+       {/* INPUT */}
+<div className="p-3 border-t">
+  {/* SUGGESTION CHIPS */}
+  {showSuggestions && (
+    <div className="mb-2">
+      <p className="text-xs text-gray-400 mb-1.5">Pertanyaan umum:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {SUGGESTIONS.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => handleSuggestion(s)}
+            className="text-xs px-3 py-1.5 rounded-full border border-blue-500 text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors whitespace-nowrap"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  )}
 
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() || isLoading}
-              className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50"
-            >
-              <Send size={16} />
-            </button>
-          </div>
+  {/* INPUT BAR */}
+  <div className="flex gap-2">
+    <input
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !isLoading) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }}
+      placeholder="Tulis pertanyaan..."
+      className="flex-1 px-4 py-2 border rounded-full text-sm"
+    />
+    <button
+      onClick={sendMessage}
+      disabled={!input.trim() || isLoading}
+      className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50"
+    >
+      <Send size={16} />
+    </button>
+  </div>
+</div>
         </div>
       </div>
     </>
