@@ -20,7 +20,8 @@ const bigquery = new BigQuery({
 // ============================================================
 // REFERENSI TABEL
 // ============================================================
-const TABLE_REF = "`" + PROJECT_ID + "chatbot_resource.source-chatbot`";
+// const TABLE_REF = "`" + PROJECT_ID + ".chatbot_data.main_table`";
+const TABLE_REF = "`" + PROJECT_ID + ".chatbot_resource.source-chatbot`";
 
 // ============================================================
 // SCHEMA LENGKAP
