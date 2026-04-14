@@ -8,10 +8,8 @@ const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT!;
 const GROQ_API_KEY = process.env.GROQ_API_KEY!;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// Model aktif per April 2026 — llama3-70b-8192 sudah didecommission
-// Pengganti resmi: https://console.groq.com/docs/deprecations
-const GROQ_MODEL_FAST = "llama-3.1-8b-instant";      // untuk generate SQL (cepat, hemat token)
-const GROQ_MODEL_SMART = "llama-3.3-70b-versatile";  // untuk generate jawaban natural
+const GROQ_MODEL_FAST = "llama-3.1-8b-instant";
+const GROQ_MODEL_SMART = "llama-3.3-70b-versatile";
 
 const bigquery = new BigQuery({
   keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
@@ -24,7 +22,7 @@ const bigquery = new BigQuery({
 const TABLE_REF = "`" + PROJECT_ID + ".chatbot_data.main_table`";
 
 // ============================================================
-// SCHEMA LENGKAP — termasuk kolom `kategori` dari screenshot
+// SCHEMA LENGKAP
 // ============================================================
 const TABLE_SCHEMA = `
 Table: ${TABLE_REF}
@@ -49,7 +47,7 @@ CARA DATA DISIMPAN (PENTING):
 `;
 
 // ============================================================
-// SYSTEM PROMPT SQL — instruksi ketat untuk Groq
+// SYSTEM PROMPT SQL
 // ============================================================
 const SQL_SYSTEM_PROMPT = `
 Kamu adalah generator SQL untuk Google BigQuery.
@@ -93,6 +91,38 @@ PANDUAN MENJAWAB:
 `;
 
 // ============================================================
+// TIPE KHUSUS UNTUK RATE LIMIT ERROR
+// ============================================================
+class RateLimitError extends Error {
+  retryAfterSeconds: number;
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+// ============================================================
+// HELPER: Parse retry-after dari pesan error Groq
+// ============================================================
+function parseRetryAfter(errorMessage: string): number {
+  // Format: "Please try again in 12m16.127999999s"
+  const matchMin = errorMessage.match(/try again in\s+(\d+)m(\d+(?:\.\d+)?)s/i);
+  if (matchMin) {
+    const minutes = parseInt(matchMin[1], 10);
+    const seconds = parseFloat(matchMin[2]);
+    return Math.ceil(minutes * 60 + seconds);
+  }
+  // Format: "Please try again in 45.5s"
+  const matchSec = errorMessage.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+  if (matchSec) {
+    return Math.ceil(parseFloat(matchSec[1]));
+  }
+  // Default fallback: 15 menit
+  return 900;
+}
+
+// ============================================================
 // HELPER: Panggil Groq dengan error handling lengkap
 // ============================================================
 async function callGroq(
@@ -122,6 +152,16 @@ async function callGroq(
   });
 
   console.log(`[${label}] HTTP status: ${res.status}`);
+
+  if (res.status === 429) {
+    const errText = await res.text();
+    console.error(`[${label}] Rate limit exceeded: ${errText}`);
+    const retryAfter = parseRetryAfter(errText);
+    throw new RateLimitError(
+      `Token harian habis. Coba lagi dalam ${Math.ceil(retryAfter / 60)} menit.`,
+      retryAfter
+    );
+  }
 
   if (!res.ok) {
     const errText = await res.text();
@@ -164,13 +204,11 @@ function extractSQL(raw: string): string {
 }
 
 // ============================================================
-// HELPER: Buat SQL fallback berbasis keyword dari pertanyaan user
-// Lebih pintar — cari di semua kolom, termasuk sub_name
+// HELPER: Buat SQL fallback berbasis keyword
 // ============================================================
 function buildKeywordSQL(question: string): string {
   const q = question.toLowerCase();
 
-  // Stopwords yang tidak berguna untuk pencarian
   const stopwords = new Set([
     "berapa", "apa", "siapa", "dimana", "kapan", "bagaimana", "yang",
     "dan", "atau", "di", "ke", "dari", "untuk", "dengan", "pada",
@@ -190,26 +228,23 @@ function buildKeywordSQL(question: string): string {
     return `SELECT var_id, metric, title, sub_name, unit, variable, kategori, tahun, value FROM ${TABLE_REF} ORDER BY tahun DESC LIMIT 20`;
   }
 
-  // Untuk setiap keyword, cari di semua kolom teks
   const conditions = keywords.map((k) =>
     `(LOWER(title) LIKE '%${k}%' OR LOWER(metric) LIKE '%${k}%' OR LOWER(sub_name) LIKE '%${k}%' OR LOWER(kategori) LIKE '%${k}%' OR LOWER(variable) LIKE '%${k}%')`
   );
 
-  // Gabungkan kondisi dengan AND agar hasil lebih relevan
   const whereClause = conditions.join(" AND ");
 
   return `SELECT var_id, metric, title, sub_name, unit, variable, kategori, tahun, value FROM ${TABLE_REF} WHERE ${whereClause} ORDER BY tahun DESC LIMIT 30`;
 }
 
 // ============================================================
-// HELPER: Format baris BigQuery menjadi teks yang mudah dibaca LLM
+// HELPER: Format baris BigQuery menjadi teks
 // ============================================================
 function formatQueryResult(rows: any[]): string {
   if (!rows || rows.length === 0) return "Tidak ada data.";
 
   const sample = rows.slice(0, 30);
 
-  // Kelompokkan per judul untuk tampilan yang lebih rapi
   const grouped: Record<string, any[]> = {};
   for (const row of sample) {
     const key = `${row.title ?? ""}|${row.tahun ?? ""}`;
@@ -293,17 +328,29 @@ export async function POST(req: NextRequest) {
       const rawSQL = await callGroq(SQL_SYSTEM_PROMPT, userQuestion, 0, "Groq-SQL", GROQ_MODEL_FAST);
       sql = extractSQL(rawSQL);
     } catch (err) {
+      // Jika step 1 (SQL generation) kena rate limit, lempar langsung
+      if (err instanceof RateLimitError) {
+        console.error("[Step 1] Rate limit saat generate SQL");
+        return NextResponse.json(
+          {
+            reply: "Rate limit tercapai.",
+            rateLimitExceeded: true,
+            retryAfterSeconds: err.retryAfterSeconds,
+          },
+          { status: 429 }
+        );
+      }
       console.error("[Step 1] SQL generation failed:", err);
     }
 
-    // Validasi — SQL harus dimulai SELECT dan mengambil lebih dari satu kolom
+    // Validasi SQL
     const isValidSQL =
       sql.trim().toLowerCase().startsWith("select") &&
       !sql.trim().toLowerCase().startsWith("select value") &&
       !sql.trim().toLowerCase().startsWith("select\nvalue");
 
     if (!isValidSQL) {
-      console.warn("[Step 1] SQL tidak valid atau hanya SELECT value, pakai keyword SQL");
+      console.warn("[Step 1] SQL tidak valid, pakai keyword SQL");
       sql = buildKeywordSQL(userQuestion);
     }
 
@@ -312,7 +359,6 @@ export async function POST(req: NextRequest) {
     // ========== LANGKAH 2: Query BigQuery ==========
     console.log("[Step 2] Querying BigQuery...");
     let queryResult: any[] = [];
-    let queryError = false;
 
     try {
       const [rows] = await bigquery.query({
@@ -323,9 +369,7 @@ export async function POST(req: NextRequest) {
       console.log(`[Step 2] Query OK. Rows returned: ${queryResult.length}`);
     } catch (err: any) {
       console.error("[Step 2] BigQuery error:", err?.message ?? err);
-      queryError = true;
 
-      // Fallback: keyword SQL yang lebih sederhana
       try {
         const fallbackSQL = buildKeywordSQL(userQuestion);
         console.log("[Step 2] Trying keyword fallback SQL...");
@@ -345,7 +389,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (queryResult.length === 0) {
-      // Jika 0 hasil, coba sekali lagi dengan keyword yang lebih longgar
       try {
         const broadSQL = buildKeywordSQL(userQuestion).replace(/ AND /g, " OR ");
         console.log("[Step 2] Retry dengan kondisi OR lebih longgar...");
@@ -353,7 +396,7 @@ export async function POST(req: NextRequest) {
         queryResult = rows ?? [];
         console.log(`[Step 2] Broad retry rows: ${queryResult.length}`);
       } catch {
-        // abaikan, tetap lanjut dengan 0 hasil
+        // abaikan
       }
     }
 
@@ -383,10 +426,23 @@ Jawab pertanyaan user berdasarkan data di atas. Tampilkan angka secara terstrukt
       reply = reply.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*/g, "").trim();
       console.log("[Step 3] Answer generated, length:", reply.length);
     } catch (err) {
+      // *** RATE LIMIT: kembalikan response 429 khusus ***
+      if (err instanceof RateLimitError) {
+        console.error("[Step 3] Rate limit saat generate jawaban");
+        return NextResponse.json(
+          {
+            reply: "Rate limit tercapai.",
+            rateLimitExceeded: true,
+            retryAfterSeconds: err.retryAfterSeconds,
+          },
+          { status: 429 }
+        );
+      }
+
       console.error("[Step 3] Answer generation failed:", err);
 
-      // Fallback manual yang informatif berdasarkan data aktual
-      const years = [...new Set(queryResult.map((r) => r.tahun).filter(Boolean))].sort((a, b) => b - a);
+      // Fallback manual
+      const years = [...new Set(queryResult.map((r) => r.tahun).filter(Boolean))].sort((a: number, b: number) => b - a);
       const latestYear = years[0];
       const latestRows = queryResult.filter((r) => r.tahun === latestYear);
 

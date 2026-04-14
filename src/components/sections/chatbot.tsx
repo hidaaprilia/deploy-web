@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { X, Send, User } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { X, Send, User, AlertTriangle, Clock } from "lucide-react";
 import Image from "next/image";
 
 interface Props {
@@ -15,6 +15,12 @@ interface Message {
   sources?: { uri: string; title: string }[];
 }
 
+// ============================================================
+// RATE LIMIT STATE — disimpan di module level agar persisten
+// selama sesi (tidak hilang saat komponen re-render)
+// ============================================================
+let globalRateLimitUntil: number | null = null; // timestamp ms kapan bisa dipakai lagi
+
 const getCurrentTime = () => {
   return new Date().toLocaleTimeString([], {
     hour: "2-digit",
@@ -22,11 +28,9 @@ const getCurrentTime = () => {
   });
 };
 
-// Fungsi untuk menghasilkan saran dinamis berdasarkan pesan user terakhir
 const generateDynamicSuggestions = (userQuery: string, botReply: string): string[] => {
   const lowerQuery = userQuery.toLowerCase();
-  
-  // Deteksi topik
+
   if (lowerQuery.includes("penduduk") || lowerQuery.includes("jiwa")) {
     return [
       "Berapa jumlah penduduk laki-laki?",
@@ -67,7 +71,6 @@ const generateDynamicSuggestions = (userQuery: string, botReply: string): string
       "Jumlah angkatan kerja",
     ];
   }
-  // Default saran lanjutan jika tidak terdeteksi topik spesifik
   return [
     "Data kependudukan terbaru",
     "Informasi kemiskinan",
@@ -76,6 +79,18 @@ const generateDynamicSuggestions = (userQuery: string, botReply: string): string
     "Ketenagakerjaan dan UMK",
   ];
 };
+
+// ============================================================
+// HELPER: Format detik menjadi "X menit Y detik"
+// ============================================================
+function formatDuration(seconds: number): string {
+  if (seconds <= 0) return "sebentar lagi";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0 && s > 0) return `${m} menit ${s} detik`;
+  if (m > 0) return `${m} menit`;
+  return `${s} detik`;
+}
 
 export default function Chatbot({ onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>(() => [
@@ -88,6 +103,7 @@ export default function Chatbot({ onClose }: Props) {
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // showSuggestions hanya true saat awal (hanya ada pesan sambutan)
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [suggestions, setSuggestions] = useState<string[]>([
     "Berapa jumlah penduduk Tanjung Jabung Barat?",
@@ -97,7 +113,63 @@ export default function Chatbot({ onClose }: Props) {
     "Di mana saya bisa akses publikasi BPS?",
   ]);
 
+  // State countdown rate limit
+  const [rateLimitCountdown, setRateLimitCountdown] = useState<number>(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ============================================================
+  // Cek apakah saat ini sedang dalam kondisi rate limited
+  // ============================================================
+  const isRateLimited = rateLimitCountdown > 0;
+
+  // ============================================================
+  // Mulai countdown dari secondsRemaining
+  // ============================================================
+  const startCountdown = useCallback((secondsRemaining: number) => {
+    // Set ke global agar persisten
+    globalRateLimitUntil = Date.now() + secondsRemaining * 1000;
+
+    setRateLimitCountdown(secondsRemaining);
+
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    countdownRef.current = setInterval(() => {
+      const remaining = Math.ceil((globalRateLimitUntil! - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setRateLimitCountdown(0);
+        globalRateLimitUntil = null;
+        if (countdownRef.current) {
+          clearInterval(countdownRef.current);
+          countdownRef.current = null;
+        }
+      } else {
+        setRateLimitCountdown(remaining);
+      }
+    }, 1000);
+  }, []);
+
+  // ============================================================
+  // Saat mount — cek apakah ada rate limit yang masih aktif
+  // ============================================================
+  useEffect(() => {
+    if (globalRateLimitUntil) {
+      const remaining = Math.ceil((globalRateLimitUntil - Date.now()) / 1000);
+      if (remaining > 0) {
+        startCountdown(remaining);
+      } else {
+        globalRateLimitUntil = null;
+      }
+    }
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [startCountdown]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const formatTextWithLinks = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -119,13 +191,12 @@ export default function Chatbot({ onClose }: Props) {
     });
   };
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-    setShowSuggestions(false); // sembunyikan saran saat mengirim
+    // Blokir pengiriman jika rate limited
+    if (isRateLimited || !input.trim() || isLoading) return;
+
+    // Sembunyikan suggestion setelah user mengirim pesan pertama
+    setShowSuggestions(false);
 
     const userText = input.trim();
     const timeNow = getCurrentTime();
@@ -155,7 +226,27 @@ export default function Chatbot({ onClose }: Props) {
 
       const data = await response.json();
 
-      if (!response.ok || !data.reply) {
+      // *** Deteksi rate limit dari server ***
+      if (response.status === 429 || data.rateLimitExceeded === true) {
+        const retryAfter: number = data.retryAfterSeconds ?? 900;
+        startCountdown(retryAfter);
+
+        // Tambahkan pesan bot yang menjelaskan situasi
+        setMessages((prev) => [
+          ...prev,
+          {
+            text: `⚠️ Batas penggunaan harian asisten telah tercapai.\n\nSilakan coba lagi dalam ${formatDuration(retryAfter)}. Anda tetap dapat mengakses data statistik di:\n- https://tanjabbarkab.bps.go.id\n- Hubungi BPS: 082173054213`,
+            sender: "bot",
+            time: getCurrentTime(),
+            sources: [{ uri: "https://tanjabbarkab.bps.go.id", title: "BPS Tanjung Jabung Barat" }],
+          },
+        ]);
+
+        setIsLoading(false);
+        return;
+      }
+
+      if (!data.reply) {
         throw new Error(data.error || "Gagal mendapatkan response");
       }
 
@@ -168,10 +259,11 @@ export default function Chatbot({ onClose }: Props) {
 
       setMessages((prev) => [...prev, botMessage]);
 
-      // Setelah bot merespon, generate saran dinamis berdasarkan pertanyaan user
+      // Opsional: perbarui saran jika suatu saat ingin ditampilkan kembali secara manual
+      // tapi kita tidak akan menampilkannya lagi di sini
       const newSuggestions = generateDynamicSuggestions(userText, data.reply);
       setSuggestions(newSuggestions);
-      setShowSuggestions(true); // tampilkan saran baru
+      // Tidak setShowSuggestions(true) lagi
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan.";
       setMessages((prev) => [
@@ -182,23 +274,17 @@ export default function Chatbot({ onClose }: Props) {
           time: getCurrentTime(),
         },
       ]);
-      // Tetap tampilkan saran default jika error
-      setSuggestions([
-        "Coba tanyakan jumlah penduduk",
-        "Data kemiskinan terbaru",
-        "PDRB Tanjabbar",
-      ]);
-      setShowSuggestions(true);
+      // Tidak menampilkan suggestion lagi saat error
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSuggestion = (text: string) => {
+    if (isRateLimited) return;
     setInput(text);
-    setShowSuggestions(false); // sembunyikan saran saat memilih, nanti akan muncul lagi setelah respon
-    // Optional: langsung kirim pesan
-    // setTimeout(() => sendMessage(), 100);
+    // Sembunyikan suggestion setelah user memilih salah satu
+    setShowSuggestions(false);
   };
 
   return (
@@ -206,6 +292,7 @@ export default function Chatbot({ onClose }: Props) {
       <div onClick={onClose} className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" />
       <div className="fixed inset-0 flex items-center justify-center z-50">
         <div className="w-full max-w-md h-screen md:h-[90vh] bg-white md:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+
           {/* HEADER */}
           <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
@@ -221,6 +308,42 @@ export default function Chatbot({ onClose }: Props) {
               <X size={18} />
             </button>
           </div>
+
+          {/* ============================================================
+              BANNER RATE LIMIT — muncul di bawah header saat rate limited
+          ============================================================ */}
+          {isRateLimited && (
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <AlertTriangle size={16} className="text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-amber-800">
+                  Batas harian tercapai
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                  Asisten tidak dapat menerima pertanyaan baru saat ini.
+                </p>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <Clock size={12} className="text-amber-500 flex-shrink-0" />
+                  <p className="text-xs text-amber-600 font-medium">
+                    Tersedia kembali dalam{" "}
+                    <span className="font-bold tabular-nums">
+                      {formatDuration(rateLimitCountdown)}
+                    </span>
+                  </p>
+                </div>
+                <a
+                  href="https://tanjabbarkab.bps.go.id"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-2 text-xs text-blue-600 underline"
+                >
+                  Cari data di tanjabbarkab.bps.go.id →
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* CHAT AREA */}
           <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50">
@@ -271,10 +394,11 @@ export default function Chatbot({ onClose }: Props) {
 
           {/* INPUT AREA */}
           <div className="p-3 border-t">
-            {showSuggestions && suggestions.length > 0 && (
+            {/* Saran — hanya muncul jika showSuggestions true dan tidak dalam rate limited */}
+            {showSuggestions && suggestions.length > 0 && !isRateLimited && (
               <div className="mb-2">
                 <p className="text-xs text-gray-400 mb-1.5">
-                  {messages.length === 1 ? "Pertanyaan umum:" : "Pertanyaan lanjutan:"}
+                  Pertanyaan umum:
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {suggestions.map((s, i) => (
@@ -289,21 +413,47 @@ export default function Chatbot({ onClose }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Input field — dinonaktifkan saat rate limited */}
             <div className="flex gap-2">
               <input
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  if (!isRateLimited) setInput(e.target.value);
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !isLoading) {
+                  if (e.key === "Enter" && !isLoading && !isRateLimited) {
                     e.preventDefault();
                     sendMessage();
                   }
                 }}
-                placeholder="Tulis pertanyaan..."
-                className="flex-1 px-4 py-2 border rounded-full text-sm"
+                placeholder={
+                  isRateLimited
+                    ? `Tersedia kembali dalam ${formatDuration(rateLimitCountdown)}...`
+                    : "Tulis pertanyaan..."
+                }
+                disabled={isRateLimited}
+                className={`flex-1 px-4 py-2 border rounded-full text-sm transition-colors ${
+                  isRateLimited
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200 placeholder-amber-500"
+                    : "bg-white text-gray-800"
+                }`}
               />
-              <button onClick={sendMessage} disabled={!input.trim() || isLoading} className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50">
-                <Send size={16} />
+              <button
+                onClick={sendMessage}
+                disabled={!input.trim() || isLoading || isRateLimited}
+                title={isRateLimited ? `Coba lagi dalam ${formatDuration(rateLimitCountdown)}` : "Kirim"}
+                className={`p-2 rounded-full transition-colors ${
+                  isRateLimited
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                } text-white`}
+              >
+                {isRateLimited ? (
+                  <Clock size={16} />
+                ) : (
+                  <Send size={16} />
+                )}
               </button>
             </div>
           </div>
