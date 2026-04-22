@@ -51,8 +51,9 @@ export default function Page() {
         <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-center">
           Layanan Kami
         </h2>
-
-        <Menu />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          <Menu />
+        </div>
       </div>
 
     </div>
