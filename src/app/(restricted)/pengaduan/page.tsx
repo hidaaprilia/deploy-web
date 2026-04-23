@@ -365,10 +365,7 @@ const Page = () => {
     if (session && session.user) {
       getUserByEmail(session.user.email!).then((res) => {
         if (res.length > 0) {
-          if (res[0].role !== "admin") {
-            return router.push("/pengaduan/tambah");
-          }
-          if ((res[0].role = "operator")) {
+          if (res[0].role !== "admin" && res[0].role !== "operator") {
             return router.push("/pengaduan/tambah");
           }
           if (session.user) {
@@ -392,8 +389,29 @@ const Page = () => {
     exportToExcel(remapData(pengaduans), "daftar-tamu");
   };
 
-  const remapData = (pengaduans: PENGADUAN[]) => {
-    return pengaduans.map((pengaduan) => {
+  const remapData = (
+    pengaduans: PENGADUAN[],
+    startDate?: string,
+    endDate?: string
+  ) => {
+    const filtered = pengaduans.filter((pengaduan) => {
+      if (!startDate && !endDate) return true;
+      
+      const eventDate = new Date(pengaduan.eventDate);
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+
+      if (start && end) return eventDate >= start && eventDate <= end;
+      if (start) return eventDate >= start;
+      if (end) return eventDate <= end;
+
+      return true;
+    });
+
+    return filtered.map((pengaduan) => {
       const temp: { [key: string]: string } = {};
       temp["pelapor"] = pengaduan.reporter;
       temp["deskripsi"] = pengaduan.description;

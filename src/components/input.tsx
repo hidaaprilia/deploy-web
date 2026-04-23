@@ -243,7 +243,7 @@ export const DatePickerWithLable = ({
       <label className="text-xs md:text-sm text-gray-600">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <DatePicker callback={onChange} value={value} disabled={disabled} />
+      <DatePicker callback={onChange} value={value} disabled={disabled} />   
     </div>
   );
 };
