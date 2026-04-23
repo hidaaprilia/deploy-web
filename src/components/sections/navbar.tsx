@@ -48,15 +48,15 @@ const Navbar = () => {
   const user = session?.user;
 
   return (
-    <div className="sticky top-0 w-full bg-white flex flex-col space-y-2 md:space-y-0 md:flex-row justify-between py-2 md:py-4 px-4 border border-b-1 bg-white z-10">
+    <div className="sticky top-0 w-full flex flex-col space-y-2 md:space-y-0 md:flex-row justify-between py-2 md:py-4 px-4 border border-b-1 bg-white z-10">
       <Logo />
-      <ul className="flex space-x-4 items-center">
+      <ul className="flex space-x-4 items-center md:mr-10 ">
         <NavigationMenu>
           <NavigationMenuList>
             <NavigationMenuItem>
               <Link
                 href="/"
-                className="group inline-flex h-9 max-w-[350px] items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50 text-xs md:text-sm"
+                className="group inline-flex h-9 max-w-[350px] items-center justify-center rounded-md bg-background px-4 py-2 font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50 text-xs md:text-sm"
               >
                 Beranda
               </Link>

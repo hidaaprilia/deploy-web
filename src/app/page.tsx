@@ -23,11 +23,12 @@ export default function Page() {
             <h2 className="text-sm sm:text-base md:text-lg text-gray-500">
               Selamat datang di
             </h2>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-snug text-blue-950">
-              Pelayanan Statistik Terpadu <br />
-              BPS Kabupaten Tanjung Jabung Barat
-            </h1>
+           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-snug text-blue-950">
+  <span className="block mb-2">Layanan Unggulan Menyajikan Statistik</span>
+  <span className="block">BPS Kabupaten Tanjung Jabung Barat</span>
+</h1>
           </div>
+
 
           <Link
             href="#layanan"
