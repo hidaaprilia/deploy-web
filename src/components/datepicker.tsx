@@ -65,13 +65,30 @@ export function DatePicker(props : DatePickerProps){
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         {mode === "range" ? (
-          <Calendar
-            mode="range"
-            selected={(props as RangeProps).value}
-            onSelect={(range) => range && (props as RangeProps).callback(range)}
-            numberOfMonths={2}
-            initialFocus
-          />
+          <div>
+            {((props as RangeProps).value?.from || (props as RangeProps).value?.to) && (
+              <div className="flex justify-between items-center px-3 py-2 border-b">
+                <span className="text-xs text-muted-foreground">
+                  {(props as RangeProps).value?.from && !(props as RangeProps).value?.to
+                    ? "Pilih tanggal akhir"
+                    : "Periode dipilih"}
+                </span>
+                <button
+                  onClick={() => (props as RangeProps).callback({ from: undefined, to: undefined })}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+            <Calendar
+              mode="range"
+              selected={(props as RangeProps).value}
+              onSelect={(range) => range && (props as RangeProps).callback(range)}
+              numberOfMonths={2}
+              initialFocus
+            />
+          </div>
         ) : (
           <Calendar
             mode="single"

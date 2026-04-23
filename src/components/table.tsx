@@ -147,9 +147,13 @@ export const GuestTable = ({
 export const PengaduanTable = ({
   dialogCallback,
   alertDialogCallback,
+  startDate,
+  endDate,
 }: {
   dialogCallback?: (pengaduan: PENGADUAN, state: boolean) => void;
   alertDialogCallback?: (pengaduan: PENGADUAN, state: boolean) => void;
+  startDate?: string;
+  endDate?: string;
 }) => {
   const { data: session } = useSession();
   const [pengaduans, setPengaduans] = useState<PENGADUAN_ACTION_RES[]>([]);
@@ -175,6 +179,26 @@ export const PengaduanTable = ({
     fetchUser(session?.user?.email || "");
   }, [session]);
   console.log(pengaduans);
+
+  const filtered = pengaduans.filter((p) => {
+  if (!startDate && !endDate) return true;
+
+  const [y, m, d] = p.pengaduan.eventDate.split("-").map(Number);
+  const eventDate = new Date(y, m - 1, d);
+
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(endDate) : null;
+
+  if (start) start.setHours(0, 0, 0, 0);
+  if (end) end.setHours(23, 59, 59, 999);
+
+  if (start && end) return eventDate >= start && eventDate <= end;
+  if (start) return eventDate >= start;
+  if (end) return eventDate <= end;
+
+  return true;
+});
+
   const pengaduanStatusRender = (status: string | null) => {
     switch (status) {
       case "Belum Ditindaklanjut":
@@ -213,8 +237,7 @@ export const PengaduanTable = ({
             </TableCell>
           </TableRow>
         )}
-        {pengaduans &&
-          pengaduans.map((pengaduan: PENGADUAN_ACTION_RES) => (
+        {filtered.map((pengaduan: PENGADUAN_ACTION_RES) => (
             <TableRow key={pengaduan.pengaduan.id}>
               <TableCell className="font-medium text-xs md:text-sm">
                 {pengaduan.users?.name}

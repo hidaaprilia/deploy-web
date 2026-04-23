@@ -1,5 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
+import { DatePicker } from "@/components/datepicker";
+import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PengaduanTable } from "@/components/table";
@@ -283,7 +285,7 @@ const EditPengaduanForm = ({ pengaduan }: { pengaduan: PENGADUAN }) => {
 const Page = () => {
   const router = useRouter();
   const [selectedPengaduan, setSelectedPengaduan] =
-    useState<PENGADUAN | null>();
+  useState<PENGADUAN | null>();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [alertDialogOpen, setAlertDialogOpen] = useState(false);
@@ -292,6 +294,7 @@ const Page = () => {
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode");
   const { data: session, status: sessionStatus } = useSession();
+  const [range, setRange] = useState<DateRange>({ from: undefined, to: undefined });
 
   // if (!session) return <Loading />;
 
@@ -386,7 +389,10 @@ const Page = () => {
   const onExportDataClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     if (!pengaduans || pengaduans?.length === 0) return;
-    exportToExcel(remapData(pengaduans), "daftar-tamu");
+    exportToExcel(
+      remapData(pengaduans, range.from?.toISOString(), range.to?.toISOString()),
+    "daftar-tamu"
+    );
   };
 
   const remapData = (
@@ -394,22 +400,24 @@ const Page = () => {
     startDate?: string,
     endDate?: string
   ) => {
-    const filtered = pengaduans.filter((pengaduan) => {
-      if (!startDate && !endDate) return true;
-      
-      const eventDate = new Date(pengaduan.eventDate);
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
+    const filtered = pengaduans.filter((p) => {
+    if (!startDate && !endDate) return true;
 
-      if (start) start.setHours(0, 0, 0, 0);
-      if (end) end.setHours(23, 59, 59, 999);
+    const [y, m, d] = p.eventDate.split("-").map(Number);
+    const eventDate = new Date(y, m - 1, d);
 
-      if (start && end) return eventDate >= start && eventDate <= end;
-      if (start) return eventDate >= start;
-      if (end) return eventDate <= end;
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
 
-      return true;
-    });
+    if (start) start.setHours(0, 0, 0, 0);
+    if (end) end.setHours(23, 59, 59, 999);
+
+    if (start && end) return eventDate >= start && eventDate <= end;
+    if (start) return eventDate >= start;
+    if (end) return eventDate <= end;
+
+    return true;
+  });
 
     return filtered.map((pengaduan) => {
       const temp: { [key: string]: string } = {};
@@ -465,6 +473,12 @@ const Page = () => {
         </TabsList>
         <TabsContent value="pengaduan" className="w-full">
           <div className="w-full flex md:justify-end items-end gap-2">
+            <DatePicker
+              mode="range"
+              value={range}
+              callback={setRange}
+            />
+
             <Button
               onClick={onAddGuestClick}
               className="flex items-center gap-2"
@@ -518,6 +532,8 @@ const Page = () => {
             <PengaduanTable
               dialogCallback={dialogCallback}
               alertDialogCallback={alertDialogCallback}
+              startDate={range.from?.toISOString()}  // ✅ add
+              endDate={range.to?.toISOString()}  
             />
           </div>
         </TabsContent>
