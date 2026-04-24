@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Table,
   TableCaption,
@@ -193,7 +194,7 @@ export const PengaduanTable = ({
   startDate,
   endDate,
   filterByReporter,
-  filterStatus, // undefined = tampil semua status
+  filterStatus,
 }: {
   dialogCallback?: (pengaduan: PENGADUAN, state: boolean) => void;
   alertDialogCallback?: (pengaduan: PENGADUAN, state: boolean) => void;
@@ -206,6 +207,8 @@ export const PengaduanTable = ({
   const [pengaduans, setPengaduans] = useState<PENGADUAN_ACTION_RES[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<USER | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 8;
 
   useEffect(() => {
     const fetchGuests = async () => {
@@ -225,19 +228,19 @@ export const PengaduanTable = ({
     fetchUser(session?.user?.email || "");
   }, [session]);
 
+  // Reset ke halaman 1 jika filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [startDate, endDate, filterByReporter, filterStatus]);
+
   const filtered = pengaduans.filter((p) => {
-    // 1. Filter berdasarkan reporter (email) — hanya untuk role "user"
     if (filterByReporter) {
       if (p.pengaduan.reporter !== filterByReporter) return false;
     }
-
-    // 2. Filter berdasarkan status tindak lanjut — semua role
     if (filterStatus) {
       const status = p.pengaduan.status ?? "Belum Ditindaklanjut";
       if (status !== filterStatus) return false;
     }
-
-    // 3. Filter berdasarkan rentang tanggal
     if (!startDate && !endDate) return true;
 
     const [y, m, d] = p.pengaduan.eventDate.split("-").map(Number);
@@ -256,6 +259,12 @@ export const PengaduanTable = ({
     return true;
   });
 
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const pengaduanStatusRender = (status: string | null) => {
     switch (status) {
       case "Belum Ditindaklanjut":
@@ -270,125 +279,156 @@ export const PengaduanTable = ({
   };
 
   return (
-    <Table>
-      <TableCaption className="text-xs md:text-sm">
-        Daftar Aduan PST Kabupaten Tanjung Jabung Barat.
-      </TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs md:text-sm">Nama</TableHead>
-          <TableHead className="text-xs md:text-sm">Pengaduan</TableHead>
-          <TableHead className="text-xs md:text-sm">Jenis Layanan</TableHead>
-          <TableHead className="text-xs md:text-sm">Bukti</TableHead>
-          <TableHead className="text-xs md:text-sm w-64">
-            Status Tindaklanjut
-          </TableHead>
-          <TableHead className="text-xs md:text-xs">
-            Tanggal Laporan
-          </TableHead>
+    <div className="space-y-4">
+      <Table>
+        <TableCaption className="text-xs md:text-sm">
+          Daftar Aduan PST Kabupaten Tanjung Jabung Barat.
+        </TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-xs md:text-sm">Nama</TableHead>
+            <TableHead className="text-xs md:text-sm">Pengaduan</TableHead>
+            <TableHead className="text-xs md:text-sm">Jenis Layanan</TableHead>
+            <TableHead className="text-xs md:text-sm">Bukti</TableHead>
+            <TableHead className="text-xs md:text-sm w-64">Status Tindaklanjut</TableHead>
+            <TableHead className="text-xs md:text-xs w-64">Tanggal Laporan</TableHead>
             {(user?.role === "admin" || user?.role === "operator") && (
-
-          <TableHead className="text-xs md:text-sm">Aksi</TableHead>
+              <TableHead className="text-xs md:text-sm">Aksi</TableHead>
             )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {loading && (
-          <TableRow>
-            <TableCell>
-              <Spinner />
-            </TableCell>
           </TableRow>
-        )}
-        {!loading && filtered.length === 0 && (
-          <TableRow>
-            <TableCell
-              colSpan={6}
-              className="text-center text-xs md:text-sm text-gray-400 py-8"
-            >
-              Tidak ada data pengaduan.
-            </TableCell>
-          </TableRow>
-        )}
-        {filtered.map((pengaduan: PENGADUAN_ACTION_RES) => (
-          <TableRow key={pengaduan.pengaduan.id}>
-            <TableCell className="font-medium text-xs md:text-sm">
-              {pengaduan.users?.name}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {pengaduan.pengaduan.description}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {pengaduan.pengaduan.category}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {pengaduan.pengaduan.proof}
-            </TableCell>
-            <TableCell className="text-xs w-64">
-              <span
-                className={pengaduanStatusRender(pengaduan.pengaduan.status)}
+        </TableHeader>
+        <TableBody>
+          {loading && (
+            <TableRow>
+              <TableCell>
+                <Spinner />
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && filtered.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                className="text-center text-xs md:text-sm text-gray-400 py-8"
               >
-                {pengaduan.pengaduan.status}
-              </span>
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {pengaduan.pengaduan.eventDate}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              <DropdownMenu modal={false}>
-                {(user?.role === "admin" || user?.role === "operator") && (
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
-                      <Settings size={16} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                )}
+                Tidak ada data pengaduan.
+              </TableCell>
+            </TableRow>
+          )}
+          {paginated.map((pengaduan: PENGADUAN_ACTION_RES) => (
+            <TableRow key={pengaduan.pengaduan.id}>
+              <TableCell className="font-medium text-xs md:text-sm">
+                {pengaduan.users?.name}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {pengaduan.pengaduan.description}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {pengaduan.pengaduan.category}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {pengaduan.pengaduan.proof}
+              </TableCell>
+              <TableCell className="text-xs w-64">
+                <span className={pengaduanStatusRender(pengaduan.pengaduan.status)}>
+                  {pengaduan.pengaduan.status}
+                </span>
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {pengaduan.pengaduan.eventDate}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                <DropdownMenu modal={false}>
+                  {(user?.role === "admin" || user?.role === "operator") && (
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <Settings size={16} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  )}
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        if (dialogCallback) dialogCallback(pengaduan.pengaduan, true);
+                      }}
+                    >
+                      <span className="flex gap-2 items-center text-gray-600">
+                        <EditIcon height={16} />Edit
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        if (alertDialogCallback) alertDialogCallback(pengaduan.pengaduan, true);
+                      }}
+                    >
+                      <span className="flex gap-2 items-center text-red-500">
+                        <TrashIcon height={16} />Hapus
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      if (dialogCallback) {
-                        dialogCallback(pengaduan.pengaduan, true);
-                      }
-                    }}
-                  >
-                    <span className="flex gap-2 items-center text-gray-600">
-                      <EditIcon height={16}></EditIcon>Edit
-                    </span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      if (alertDialogCallback) {
-                        alertDialogCallback(pengaduan.pengaduan, true);
-                      }
-                    }}
-                  >
-                    <span className="flex gap-2 items-center text-red-500">
-                      <TrashIcon height={16}></TrashIcon>
-                      Hapus
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <p className="text-xs text-gray-500">
+            Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} dari{" "}
+            {filtered.length} data
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft size={14} />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                className="h-8 w-8 p-0 text-xs"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight size={14} />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
+
 export const WhistleBlowingTable = ({
   dialogCallback,
   alertDialogCallback,
   startDate,
   endDate,
   filterByReporter,
-  filterStatus, // undefined = tampil semua status
+  filterStatus,
 }: {
   dialogCallback?: (whislteblowing: WHISTLEBLOWING, state: boolean) => void;
   alertDialogCallback?: (whistleblowing: WHISTLEBLOWING, state: boolean) => void;
@@ -401,6 +441,8 @@ export const WhistleBlowingTable = ({
   const [whistleblowings, setWhistleblowing] = useState<WHISTLEBLOWING_ACTION_RES[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<USER | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 8;
 
   useEffect(() => {
     const fetchGuests = async () => {
@@ -420,19 +462,19 @@ export const WhistleBlowingTable = ({
     fetchUser(session?.user?.email || "");
   }, [session]);
 
+  // Reset ke halaman 1 jika filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [startDate, endDate, filterByReporter, filterStatus]);
+
   const filtered = whistleblowings.filter((p) => {
-    // 1. Filter berdasarkan reporter (email) — hanya untuk role "user"
     if (filterByReporter) {
       if (p.whistleblowing.reporter !== filterByReporter) return false;
     }
-
-    // 2. Filter berdasarkan status tindak lanjut — semua role
     if (filterStatus) {
       const status = p.whistleblowing.status ?? "Belum Ditindaklanjut";
       if (status !== filterStatus) return false;
     }
-
-    // 3. Filter berdasarkan rentang tanggal
     if (!startDate && !endDate) return true;
 
     const [y, m, d] = p.whistleblowing.eventDate.split("-").map(Number);
@@ -451,6 +493,12 @@ export const WhistleBlowingTable = ({
     return true;
   });
 
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const whistleblowingStatusRender = (status: string | null) => {
     switch (status) {
       case "Belum Ditindaklanjut":
@@ -465,118 +513,147 @@ export const WhistleBlowingTable = ({
   };
 
   return (
-    <Table>
-      <TableCaption className="text-xs md:text-sm">
-        Daftar Whistleblowing PST Kabupaten Tanjung Jabung Barat.
-      </TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs md:text-sm">Nama</TableHead>
-          <TableHead className="text-xs md:text-sm">Pelanggaran</TableHead>
-          <TableHead className="text-xs md:text-sm">Jenis Pelanggaran</TableHead>
-          <TableHead className="text-xs md:text-sm">Bukti</TableHead>
-          <TableHead className="text-xs md:text-sm w-64">
-            Status Tindaklanjut
-          </TableHead>
-          <TableHead className="text-xs md:text-xs">
-            Tanggal Laporan
-          </TableHead>
-                {(user?.role === "admin" || user?.role === "operator") && (
-
-          <TableHead className="text-xs md:text-sm">Aksi</TableHead>
-                )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {loading && (
+    <div className="space-y-4">
+      <Table>
+        <TableCaption className="text-xs md:text-sm">
+          Daftar Whistleblowing PST Kabupaten Tanjung Jabung Barat.
+        </TableCaption>
+        <TableHeader>
           <TableRow>
-            <TableCell>
-              <Spinner />
-            </TableCell>
+            <TableHead className="text-xs md:text-sm">Nama</TableHead>
+            <TableHead className="text-xs md:text-sm">Pelanggaran</TableHead>
+            <TableHead className="text-xs md:text-sm">Jenis Pelanggaran</TableHead>
+            <TableHead className="text-xs md:text-sm">Bukti</TableHead>
+            <TableHead className="text-xs md:text-sm w-64">Status Tindaklanjut</TableHead>
+            <TableHead className="text-xs md:text-xs w-64">Tanggal Laporan</TableHead>
+            {(user?.role === "admin" || user?.role === "operator") && (
+              <TableHead className="text-xs md:text-sm">Aksi</TableHead>
+            )}
           </TableRow>
-        )}
-        {!loading && filtered.length === 0 && (
-          <TableRow>
-            <TableCell
-              colSpan={6}
-              className="text-center text-xs md:text-sm text-gray-400 py-8"
-            >
-              Tidak ada data Whistleblowing.
-            </TableCell>
-          </TableRow>
-        )}
-        {filtered.map((whistleblowing: WHISTLEBLOWING_ACTION_RES) => (
-          <TableRow key={whistleblowing.whistleblowing.id}>
-            <TableCell className="font-medium text-xs md:text-sm">
-              {whistleblowing.users?.name}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {whistleblowing.whistleblowing.description}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {whistleblowing.whistleblowing.category}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {whistleblowing.whistleblowing.proof}
-            </TableCell>
-            <TableCell className="text-xs w-64">
-              <span
-                className={whistleblowingStatusRender(whistleblowing.whistleblowing.status)}
+        </TableHeader>
+        <TableBody>
+          {loading && (
+            <TableRow>
+              <TableCell>
+                <Spinner />
+              </TableCell>
+            </TableRow>
+          )}
+          {!loading && filtered.length === 0 && (
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                className="text-center text-xs md:text-sm text-gray-400 py-8"
               >
-                {whistleblowing.whistleblowing.status}
-              </span>
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              {whistleblowing.whistleblowing.eventDate}
-            </TableCell>
-            <TableCell className="text-xs md:text-sm">
-              <DropdownMenu modal={false}>
-                {(user?.role === "admin" || user?.role === "operator") && (
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
-                      <Settings size={16} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                )}
+                Tidak ada data Whistleblowing.
+              </TableCell>
+            </TableRow>
+          )}
+          {paginated.map((whistleblowing: WHISTLEBLOWING_ACTION_RES) => (
+            <TableRow key={whistleblowing.whistleblowing.id}>
+              <TableCell className="font-medium text-xs md:text-sm">
+                {whistleblowing.users?.name}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {whistleblowing.whistleblowing.description}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {whistleblowing.whistleblowing.category}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {whistleblowing.whistleblowing.proof}
+              </TableCell>
+              <TableCell className="text-xs w-64">
+                <span className={whistleblowingStatusRender(whistleblowing.whistleblowing.status)}>
+                  {whistleblowing.whistleblowing.status}
+                </span>
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                {whistleblowing.whistleblowing.eventDate}
+              </TableCell>
+              <TableCell className="text-xs md:text-sm">
+                <DropdownMenu modal={false}>
+                  {(user?.role === "admin" || user?.role === "operator") && (
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <Settings size={16} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  )}
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        if (dialogCallback) dialogCallback(whistleblowing.whistleblowing, true);
+                      }}
+                    >
+                      <span className="flex gap-2 items-center text-gray-600">
+                        <EditIcon height={16} />Edit
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        if (alertDialogCallback) alertDialogCallback(whistleblowing.whistleblowing, true);
+                      }}
+                    >
+                      <span className="flex gap-2 items-center text-red-500">
+                        <TrashIcon height={16} />Hapus
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      if (dialogCallback) {
-                        dialogCallback(whistleblowing.whistleblowing, true);
-                      }
-                    }}
-                  >
-                    <span className="flex gap-2 items-center text-gray-600">
-                      <EditIcon height={16}></EditIcon>Edit
-                    </span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      if (alertDialogCallback) {
-                        alertDialogCallback(whistleblowing.whistleblowing, true);
-                      }
-                    }}
-                  >
-                    <span className="flex gap-2 items-center text-red-500">
-                      <TrashIcon height={16}></TrashIcon>
-                      Hapus
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <p className="text-xs text-gray-500">
+            Menampilkan {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} dari{" "}
+            {filtered.length} data
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft size={14} />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                className="h-8 w-8 p-0 text-xs"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight size={14} />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
-
 
 export default GuestTable;
