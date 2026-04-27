@@ -10,17 +10,17 @@ const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const GROQ_MODEL_FAST = "llama-3.1-8b-instant";
 const GROQ_MODEL_SMART = "llama-3.3-70b-versatile";
-// const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS!);
+const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS!);
 const bigquery = new BigQuery({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  // credentials
+  // keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+  credentials
 });
 
 // ============================================================
 // REFERENSI TABEL
 // ============================================================
-const TABLE_REF = "`" + PROJECT_ID + ".chatbot_data.main_table`";
-// const TABLE_REF = "" + PROJECT_ID + ".chatbot_resource.source-chatbot";
+// const TABLE_REF = "`" + PROJECT_ID + ".chatbot_data.main_table`";
+const TABLE_REF = "" + PROJECT_ID + ".chatbot_resource.source-chatbot";
 // ============================================================
 // SCHEMA LENGKAP
 // ============================================================
